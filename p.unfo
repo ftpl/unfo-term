@@ -1,0 +1,19 @@
+#!/bin/bash
+source $(dirname ${0})/xyz
+if [ "${1}" != "" ]; then
+	otagid="${1}"
+fi
+if [ "${2}" != "" ]; then
+	otitle="${2}"
+fi
+if [ "${3}" != "" ]; then
+	shift 2
+	oreply="$*"
+fi
+
+cmd="${curl} -X POST -H '${huagent}' -H '${hauthor}' -H '${hcookie}' -H '${hjson}' -d '"'{"data":{"type":"discussions","attributes":{"title":"'$(escape "${otitle}")'","content":"'$([ "${iscode}" = "1" ] && printf '\u005b\u0063\u006f\u0064\u0065\u005d')$(escape "${oreply}")$([ "${iscode}" = "1" ] && printf '\u005b\u002f\u0063\u006f\u0064\u0065\u005d')'"},"relationships":{'${ivid}'"tags":{"data":[{"type":"tags","id":"'${otagid}'"}]}}}}'"' ${cmdfix} '${ohost}/api/discussions'"
+#echo ${cmd}
+ocmd=$(eval ${cmd})
+unescape ${ocmd}
+echo ""
+

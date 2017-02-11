@@ -1,0 +1,26 @@
+#!/bin/bash
+source $(dirname ${0})/xyz
+if [ "x${op}" = "x" ]; then
+	if [ "x${2}" != "x" ]; then
+		op="${2}"
+	else
+		op=1
+	fi
+fi
+if [ "${1}" != "" ]; then
+	otid="${1}"
+	urlfix="/d/${otid}"
+	ourl="${ohost}${urlfix}?nojs=1&page=${op}"
+	${curl} -H "${huagent}" -H "${hcookie}" "${ourl}" | sed -n '/<h2>/, /class="App-composer">/Ip' | sed -r 's/<hr>/'"${ohrline}"'/Ig;s/^ *|<script[^>]*>.*<\/script>//Ig;s/<\/?(p|br|ol|pre|code|div|strong|blockquote)[^>]*>//Ig;s/<a href=[^>]*class="PostMention" data-id="([^"]*)"[^>]*>([^<]*)<\/a>/@\2#\1/Ig;s/<a href="([^"]*)"[^<]*<\/a>/ \1 /Ig;s/<img src="([^"]+)" title=[^>]+>/ [img https:\/\/vivaldi.club\1] /gi;s/<img[^>]*src="([^"]*)"[^>]*>/ [img \1] /Ig;s/\&amp;/\&/g;s/&lt;/</g;s/&gt;/>/Ig' | grep -vie '^$'
+	echo ${ohrline}
+	echo ${ourl}
+else
+	urlfix="/all"
+	ourl="${ohost}${urlfix}?nojs=1&page=${op}"
+	${curl} -H "${huagent}" -H "${hcookie}" "${ourl}" | sed -r 's/^\s*//g' | sed -r '/^<a href=[^<]*$/{N;s/\n//Ig}' | grep -ie '<a href=[^>]*d\/'|sed -r 's/<a href=[^>]*d\///Ig;s/">/-/g' | sed -r "/${oblock}/Id"
+	echo ${ohrline}
+	echo ${ourl}
+fi
+# odata=$(curl -4 "${ohost}/api/forum")
+echo ""
+

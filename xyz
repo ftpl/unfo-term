@@ -1,0 +1,236 @@
+#!/bin/bash
+filecoding=UTF-8
+shellcoding=UTF-8
+#if [ "x${shellcoding}" = "x" ]; then
+#	if [ -z "${WINDIR}" ]; then shellcoding=UTF-8; else shellcoding=GB18030; fi
+#fi
+
+helpinfo(){
+cat>&1 <<unfohelpEof
+b.unfo # 打开首页帖子列表
+op=N  b.unfo # 打开帖子列表第N个分页
+b.unfo  [discussionId]  [page] # 打开指定帖子的指定页码
+i.unfo  [user]  [pw] # 以用户名user和密码pw登陆并将得到的token记录到文件以备使用
+r.unfo  [discussionId]  [text] # 以默认用户名回帖
+ouser=xyz  r.unfo  [discussionId]  [text] # 以用户名xyz(限事先以unfo.i成功登陆过的id)回帖
+iscode=1   r.unfo  [discussionId]  [text] # 自动为回帖内容添加ubb[code]标记
+p.unfo  [tagId]  [title]  [text] # 在指定tagId下发布新话题
+ivid='00,000'  p.unfo  [tagId]  [title]  [text] # 在指定tagId下发布只有userId为00和000的用户可见的新话题
+ivuer='u1,u2'  p.unfo  [tagId]  [title]  [text] # 在指定tagId下发布只有userName为u1和u2的用户可见的新话题
+xyz [--help|-h|--tags|-t] # 通用文件,显示帮助或tag列表
+# 首次使用前请修改 xyz 文件或在当前shell中 export ouser=xxx 来指定默认用户名以提高效率
+unfohelpEof
+}
+
+taginfo(){
+cat>&1 <<unfotagEof
+{
+"1":"水塘",
+"2":"Vivaldi",
+"3":"Snapshot",
+"4":"沙盒",
+"5":"Mac",
+"6":"Windows",
+"7":"Linux",
+"8":"視頻",
+"9":"純水",
+"10":"xyz",
+"11":"機器姬",
+"12":"雜務",
+"13":"公告",
+"14":"硬體",
+"15":"軟體",
+"16":"瀏覽器",
+"17":"無題",
+"18":"多圖",
+"19":"天文圖",
+"20":"申請",
+"21":"Bug",
+"22":"Team",
+"23":"裡世界",
+"24":"政治",
+"25":"18X",
+"26":"已解決",
+"27":"地震",
+"28":"調查",
+"29":"求助",
+"30":"Flarum"}
+unfotagEof
+}
+
+if [ "x${1}" != "x" ]; then
+	case ${1} in
+	--help|-help|help|--h|-h|h)
+		helpinfo
+		exit 0
+		;;
+	--tags|-tags|tags|--t|-t|t)
+		taginfo
+		exit 0
+		;;
+	esac
+fi
+
+urlencode(){
+	if [ "x${1}" = "x" ]; then
+		ohex=$(cat)
+		# while read ostdin; do echo ${ostdin}; done
+	else
+		ohex="$*"
+	fi
+	if [ "x${ohex}" != "x" ]; then
+		echo -n "${ohex}" | iconv -c -f "${shellcoding}" -t UTF-8 | od -An -t x1 | tr -d ' \n\r' | sed -r 's/([0-9a-f][0-9a-f])/%\1/gi'
+	fi
+}
+urldecode(){
+	if [ "x${1}" = "x" ]; then
+		ohex=$(cat)
+	else
+		ohex="$*"
+	fi
+	if [ "x${ohex}" != "x" ]; then
+		printf $(echo -n "${ohex}" | iconv -c -f "${shellcoding}" -t ${filecoding} | sed -r 's/\\/\\\\/g; s/%([0-9a-f][0-9a-f])/\\x\1/gi') | iconv -c -f UTF-8 -t "${shellcoding}"
+	fi
+}
+escape(){
+	if [ "x${1}" = "x" ]; then
+		ohex=$(cat)
+	else
+		ohex="$*"
+	fi
+	if [ "x${ohex}" != "x" ]; then
+		ohex="$(echo -n "${ohex}" | iconv -c -f "${shellcoding}" -t UTF-16BE | od -An -t x1 | tr -d '\n\r')"
+		echo -n "${ohex}" | sed -r 's/^\s*fe ff//gi; s/ ([0-9a-f][0-9a-f]) ([0-9a-f][0-9a-f])/\\u\1\2/gi'
+	fi
+}
+unescape(){
+	if [ "x${1}" = "x" ]; then
+		ohex=$(cat)
+	else
+		ohex="$*"
+	fi
+	if [ "x${ohex}" != "x" ]; then
+		ohex="$(echo -n "${ohex}" | iconv -c -f "${shellcoding}" -t UTF-16BE | od -An -t x1 | tr -d '\n\r')"
+		ohex="$(echo -n "${ohex}" | sed -r 's/ 00 5c 00 75 00 ([0-9a-f][0-9a-f]) 00 ([0-9a-f][0-9a-f]) 00 ([0-9a-f][0-9a-f]) 00 ([0-9a-f][0-9a-f])/ \\x\1\\x\2 \\x\3\\x\4/gi;')"
+		printf "$(printf "${ohex}" | sed -r 's/ /\\x/gi')" | iconv -c -f UTF-16BE -t "${shellcoding}"
+	fi
+}
+
+putsid(){
+#set -x
+	# putsid ${ouser} ${otoken} ${sessionDbFile}
+	if [ -e "${3}" ]; then
+		#ckuser=$(grep -oie "^${1}:" "${3}")
+		ckuser=$(sed -n -r "/^${1}:/p" "${3}" | cut -d ':' -f1)
+	fi
+	if [ "x${ckuser}" = "x${1}" ]; then
+		sed -i -r "s/^${1}:.*$/${1}:${2}/g" "${3}"
+	else
+		echo "" >> "${3}"
+		echo "${1}:${2}" >> "${3}"
+	fi
+}
+
+getsid(){
+#set -x
+	# getsid ${ouser} ${sessionDbFile}
+	if [ -e "${2}" ]; then
+		#cksid=$(grep -ie "^${1}:" "${2}" | cut -d ':' -f2)
+		cksid=$(sed -n -r "/^${1}:/p" "${2}" | cut -d ':' -f2)
+	fi
+	if [ "x${cksid}" = "x" ]; then
+		echo "err: getsid '${1}', userId not found."
+	else
+		echo "${cksid}"
+	fi
+}
+
+if [ "${ohost}" = "" ]; then
+	ohost="https://vivaldi.club"
+	#ohost="https://unfo.xyz"
+fi
+if [ "${ouserdb}" = "" ]; then
+	ouserdb=${HOME}/unfo.user
+fi
+if [ "${ocmdfile}" = "" ]; then
+	ocmdfile=/tmp/unfo.tmp
+fi
+if [ "${ouser}" = "" ]; then
+	#ouser='殺'
+	ouser=$(grep -vie '^$' "${ouserdb}" | head -n1 | cut -d ':' -f1)
+fi
+if [ "${sid}" = "" ]; then
+	sid=$(getsid "${ouser}" "${ouserdb}")
+fi
+if [ "${huagent}" = "" ]; then
+	huagent='User-Agent: Opera/9'
+else
+	huagent='User-Agent: '"${huagent}"
+fi
+if [ "${hauthor}" = "" ]; then
+	hauthor='Authorization: Token '"${sid}"
+fi
+if [ "${hcookie}" = "" ]; then
+	hcookie='Cookie: flarum_remember='"${sid}"
+fi
+if [ "${hjson}" = "" ]; then
+    hjson='Content-Type: application/json; charset=utf-8'
+fi
+if [ "${curl}" = "" ]; then
+	curl="curl --insecure -s -L -4 -H 'DNT:1' "
+fi
+if [ "${ohrline}" = "" ]; then
+	ohrline='------------------------------'
+fi
+if [ "${oblock}" = "" ]; then
+	oblock='^(69|73|500|381|512)-|歷史車輪下的|每日一天文|級大地震啊|單向曆'
+fi
+
+getuids(){
+# query user ids from usernames, return id-list-str split by ","
+	oquser="$*"
+	oluser=""
+	oquser=$(echo "${oquser}"|grep -oiP "[^ \@	\s\t,\.\*\#\%\;\:\+\!\?\|\'\"\[\]\{\}\(\)\<\>\$]+")
+	if [ "${oquser}" != "" ]; then
+		for i in ${oquser}; do
+			#urlfix="/api/users?filter%5Bq%5D="$(urlencode $1)
+			urlfix="/api/users/${i}"
+			ourl="${ohost}${urlfix}"
+			oiuser=$(${curl} -H "${huagent}" -H "${hauthor}"  -H "${hcookie}" "${ourl}" | grep -oiP '\{\"type\"\:\"users\",\"id\"\:\"[0-9]+\"' | grep -oiP '[0-9]+')
+			oluser="${oluser}${oiuser},"
+		done
+		oluser=$(echo "${oluser}"|sed -r 's#[ ,	\n\r\s\t]+$##g')
+	else
+		echo 'err: '$0':"getuids()", invalid username.'
+		exit 1
+	fi
+	echo "${oluser}"
+}
+#getuids "kalin 殺 username"
+
+if [ "${ivuser}" != "" ]; then
+	ivid="${ivid},"$(getuids "${ivuser}")
+fi
+
+if [ "${ivid}" != "" ]; then
+	ivid=$(echo "${ivid}"|grep -oiP "[0-9]+")
+	if [ "${ivid}" != "" ]; then
+		oivid=""
+		for i in ${ivid}; do
+			oivid=${oivid}'{"type":"users","id":"'${i}'"},'
+		done
+		oivid=$(echo "${oivid}"|sed -r 's#[ ,	\n\r\s\t]+$##g')
+		ivid='"recipientUsers":{"data":['${oivid}']},'
+	else
+		echo 'err: '$0':"ivid" invalid, please type id nums split with ","'
+		exit 1
+	fi
+fi
+#echo "'${ivid}'"
+
+# for auto  post/reply
+otid=15
+otagid=4
+otitle="$(date +'%Y-%m-%d @ %H:%M:%S')"
+oreply=$(echo -e "天空没有\n翅膀的痕迹\n但我已经\n努力飞过...")
+

@@ -1,0 +1,22 @@
+#!/bin/bash
+source $(dirname ${0})/xyz
+if [ "${1}" != "" ]; then
+	ouser="${1}"
+else
+	echo "UserName:"
+	read ouser
+	#ouser="Username"
+fi
+if [ "${2}" != "" ]; then
+	opass="${2}"
+else
+	echo "pass for ${ouser}:"
+	read -s opass
+fi
+
+cmd="${curl} -X POST -H '${huagent}' -H '${hjson}' -d '"'{"identification": "'$(escape ${ouser})'","password": "'$(escape ${opass})'"}'"' ${cmdfix} '${ohost}/login'"
+ocmd=$(eval ${cmd})
+xtoken=$(echo "${ocmd}" | sed -r 's/","userId.*//Ig;s/.*":"//g')
+echo "${ouser}:${xtoken}"
+putsid "${ouser}" "${xtoken}" "${ouserdb}"
+echo ""
